@@ -35,6 +35,27 @@ vector_store = MongoDBAtlasVectorSearch.from_connection_string(
 )
 
 
+def _build_pre_filter(section: str | None, has_code: bool | None) -> dict:
+    pre_filter = {}
+    if section is not None:
+        pre_filter["section"] = {"$eq": section}
+    if has_code is not None:
+        pre_filter["hasCode"] = {"$eq": has_code}
+    return pre_filter
+
+
+def _with_rate_limit_retry(fn):
+    # Each query is embedded by Voyage; without a payment method the account allows only 3 requests/minute
+    for attempt in range(1, 4):
+        try:
+            return fn()
+        except voyageai.error.RateLimitError:
+            if attempt == 3:
+                raise
+            print("(Voyage rate limit reached - waiting 20s and retrying)")
+            time.sleep(20)
+
+
 def query_data(query: str, section: str | None = None, has_code: bool | None = None,
                k: int = TOP_K) -> list[Document]:
     """Return the k chunks most similar to the query.
@@ -43,27 +64,22 @@ def query_data(query: str, section: str | None = None, has_code: bool | None = N
               "docomotion-for-generators", "advanced-features", "connect", "release-notes"
     has_code: True = only articles with code/scripts, False = only articles without
     """
-    pre_filter = {}
-    if section is not None:
-        pre_filter["section"] = {"$eq": section}
-    if has_code is not None:
-        pre_filter["hasCode"] = {"$eq": has_code}
-
     search_kwargs = {"k": k}
+    pre_filter = _build_pre_filter(section, has_code)
     if pre_filter:
         search_kwargs["pre_filter"] = pre_filter
 
     retriever = vector_store.as_retriever(search_type="similarity", search_kwargs=search_kwargs)
+    return _with_rate_limit_retry(lambda: retriever.invoke(query))
 
-    # Each query is embedded by Voyage; without a payment method the account allows only 3 requests/minute
-    for attempt in range(1, 4):
-        try:
-            return retriever.invoke(query)
-        except voyageai.error.RateLimitError:
-            if attempt == 3:
-                raise
-            print("(Voyage rate limit reached - waiting 20s and retrying)")
-            time.sleep(20)
+
+def query_data_with_scores(query: str, section: str | None = None, has_code: bool | None = None,
+                           k: int = TOP_K) -> list[tuple[Document, float]]:
+    """Same search as query_data, also returning each chunk's similarity score (0-1, higher = closer)."""
+    pre_filter = _build_pre_filter(section, has_code) or None
+    return _with_rate_limit_retry(
+        lambda: vector_store.similarity_search_with_score(query, k=k, pre_filter=pre_filter)
+    )
 
 
 def print_results(query: str, results: list[Document]) -> None:

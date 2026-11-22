@@ -59,6 +59,19 @@ response_parser = StrOutputParser()
 rag_chain = retrieve | custom_rag_prompt | llm | response_parser
 
 
+# Same prompt -> LLM -> parser steps as rag_chain, for callers that retrieve the chunks themselves
+# (the web UI retrieves first so it can show the chunks before the answer is ready)
+answer_chain = custom_rag_prompt | llm | response_parser
+
+
+def build_prompt(question: str, docs: list[Document]) -> str:
+    return custom_rag_prompt.format(context=format_docs(docs), question=question)
+
+
+def generate_answer(question: str, docs: list[Document]) -> str:
+    return str(answer_chain.invoke({"context": format_docs(docs), "question": question}))
+
+
 def query_data(query: str) -> str:
     answer = rag_chain.invoke(query)
     print(answer)

@@ -3,145 +3,319 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Docomotion Assistant</title>
+<title>Docomotion Assistant · RAG demo</title>
+<script>
+  // Follow the OS light/dark setting (Bootstrap 5.3 color modes)
+  document.documentElement.setAttribute("data-bs-theme",
+    window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");
+</script>
+<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+<link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/marked@12.0.2/marked.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/dompurify@3.1.6/dist/purify.min.js"></script>
 <style>
-  :root {
-    --bg: #f4f5f7; --panel: #ffffff; --text: #1d2330; --muted: #6b7385;
-    --border: #e2e5eb; --accent: #2563eb; --accent-text: #ffffff;
-    --user-bubble: #2563eb; --bot-bubble: #f1f3f7; --error: #b42318; --error-bg: #fdecea;
+  html, body { height: 100%; }
+  .app-row { min-height: 100vh; }
+  @media (min-width: 992px) {
+    .app-row { height: 100vh; }
+    .pane-scroll { height: 100vh; overflow-y: auto; }
   }
-  @media (prefers-color-scheme: dark) {
-    :root {
-      --bg: #0f1218; --panel: #171b23; --text: #e6e9ef; --muted: #98a1b3;
-      --border: #2a303c; --accent: #4f8cff; --accent-text: #ffffff;
-      --user-bubble: #3b74e6; --bot-bubble: #222835; --error: #ff8a80; --error-bg: #3a1d1d;
-    }
+  /* Pipeline step cards */
+  .step-card { transition: border-color .2s, box-shadow .2s; }
+  .step-num {
+    width: 28px; height: 28px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center;
+    font-size: .8rem; font-weight: 600; background: var(--bs-secondary-bg); color: var(--bs-secondary-color); flex-shrink: 0;
   }
-  * { box-sizing: border-box; }
-  body {
-    margin: 0; background: var(--bg); color: var(--text);
-    font: 15px/1.55 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
-    display: flex; justify-content: center; min-height: 100vh; padding: 24px 16px;
-  }
-  .chat {
-    width: 100%; max-width: 820px; height: calc(100vh - 48px);
-    background: var(--panel); border: 1px solid var(--border); border-radius: 14px;
-    display: flex; flex-direction: column; overflow: hidden;
-  }
-  header { padding: 16px 20px; border-bottom: 1px solid var(--border); }
-  header h1 { margin: 0; font-size: 17px; }
-  header p { margin: 2px 0 0; color: var(--muted); font-size: 13px; }
-  #messages { flex: 1; overflow-y: auto; padding: 20px; display: flex; flex-direction: column; gap: 14px; }
-  .msg { max-width: 85%; padding: 10px 14px; border-radius: 12px; overflow-wrap: anywhere; }
-  .user { align-self: flex-end; background: var(--user-bubble); color: var(--accent-text); border-bottom-right-radius: 4px; white-space: pre-wrap; }
-  .bot { align-self: flex-start; background: var(--bot-bubble); border-bottom-left-radius: 4px; }
-  .bot p { margin: 0 0 8px; } .bot p:last-child { margin-bottom: 0; }
-  .bot ul, .bot ol { margin: 4px 0 8px; padding-left: 22px; }
-  .bot a { color: var(--accent); }
-  .bot code { background: rgba(127,127,127,.15); padding: 1px 5px; border-radius: 4px; font-size: 13px; }
-  .bot pre { background: rgba(127,127,127,.12); padding: 10px; border-radius: 8px; overflow-x: auto; }
-  .bot pre code { background: none; padding: 0; }
-  .meta { font-size: 12px; color: var(--muted); margin-top: 6px; }
-  .error { align-self: flex-start; background: var(--error-bg); color: var(--error); }
-  .thinking { color: var(--muted); font-style: italic; }
-  .thinking::after { content: ""; animation: dots 1.4s steps(4) infinite; }
-  @keyframes dots { 0% { content: ""; } 25% { content: "."; } 50% { content: ".."; } 75% { content: "..."; } }
-  .suggestions { display: flex; flex-wrap: wrap; gap: 8px; }
-  .suggestions button {
-    border: 1px solid var(--border); background: var(--panel); color: var(--text);
-    border-radius: 999px; padding: 6px 12px; font: inherit; font-size: 13px; cursor: pointer;
-  }
-  .suggestions button:hover { border-color: var(--accent); color: var(--accent); }
-  form { display: flex; gap: 10px; padding: 14px; border-top: 1px solid var(--border); }
-  textarea {
-    flex: 1; resize: none; height: 46px; max-height: 140px; padding: 11px 12px;
-    border: 1px solid var(--border); border-radius: 10px; background: var(--bg); color: var(--text); font: inherit;
-  }
-  textarea:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
-  #send {
-    border: 0; border-radius: 10px; padding: 0 18px; background: var(--accent); color: var(--accent-text);
-    font: inherit; font-weight: 600; cursor: pointer;
-  }
-  #send:disabled { opacity: .5; cursor: default; }
-  @media (max-width: 600px) { body { padding: 0; } .chat { height: 100vh; border-radius: 0; border: 0; } .msg { max-width: 92%; } }
+  .step-card.active { border-color: var(--bs-primary); box-shadow: 0 0 0 .2rem rgba(var(--bs-primary-rgb), .15); }
+  .step-card.active .step-num { background: var(--bs-primary); color: #fff; }
+  .step-card.done { border-color: var(--bs-success); }
+  .step-card.done .step-num { background: var(--bs-success); color: #fff; }
+  .step-status { min-height: 1.25rem; }
+  .flow-arrow { color: var(--bs-secondary-color); }
+  /* Chat */
+  .chat-pane { height: 75vh; }
+  @media (min-width: 992px) { .chat-pane { height: 100vh; } }
+  #messages { overflow-y: auto; }
+  .bubble { max-width: 92%; overflow-wrap: anywhere; }
+  .bubble-user { white-space: pre-wrap; }
+  .bubble p:last-child, .bubble ul:last-child, .bubble ol:last-child { margin-bottom: 0; }
+  .bubble ul, .bubble ol { padding-left: 1.2rem; }
+  .bubble pre { background: var(--bs-tertiary-bg); padding: .5rem; border-radius: .375rem; }
+  #input { resize: none; }
+  .chunk-text { white-space: pre-wrap; font-size: .85rem; max-height: 220px; overflow-y: auto; }
+  .score-bar { width: 90px; height: 6px; }
 </style>
 </head>
-<body>
-<main class="chat">
-  <header>
-    <h1>Docomotion Assistant</h1>
-    <p>Answers from the Docomotion knowledge base (docomotion.com/support)</p>
-  </header>
+<body class="bg-body-tertiary">
+<div class="container-fluid p-0">
+  <div class="row g-0 app-row">
 
-  <div id="messages" aria-live="polite">
-    <div class="msg bot">
-      <p>Hi! Ask me anything about Docomotion. Answers take about 20 seconds.</p>
-      <div class="suggestions">
-        <button type="button">What permission sets does Docomotion support?</button>
-        <button type="button">How do I add a Generate button to a record page?</button>
-        <button type="button">How do I protect a PDF with a password?</button>
-        <button type="button">What is the Live Editor?</button>
+    <!-- ===================== LEFT 2/3: how it works ===================== -->
+    <section class="col-lg-8 order-2 order-lg-1 pane-scroll">
+      <div class="p-4 p-xl-5">
+
+        <div class="d-flex align-items-center gap-2 mb-2">
+          <span class="badge text-bg-primary">RAG demo</span>
+          <span class="badge text-bg-secondary">LangChain · MongoDB Atlas · Voyage AI · Gemini</span>
+        </div>
+        <h1 class="h3 fw-semibold mb-2">Docomotion Knowledge Assistant</h1>
+        <p class="lead fs-6 text-body-secondary mb-4">
+          An example of <strong>Retrieval-Augmented Generation (RAG)</strong>. A language model doesn't know
+          Docomotion's documentation, so before answering, this app <em>retrieves</em> the most relevant passages
+          from the <a href="https://www.docomotion.com/support/" target="_blank" rel="noopener">Docomotion knowledge base</a>
+          and gives them to the model as context. Answers are grounded in that text, cite their sources,
+          and the assistant says "I don't know" when the knowledge base doesn't cover a question.
+        </p>
+
+        <!-- Live numbers -->
+        <div class="row g-3 mb-4" id="stats">
+          <div class="col-6 col-md-3"><div class="card h-100"><div class="card-body py-3">
+            <div class="small text-body-secondary"><i class="bi bi-file-earmark-text"></i> Articles</div>
+            <div class="fs-4 fw-semibold" data-stat="articles">–</div></div></div></div>
+          <div class="col-6 col-md-3"><div class="card h-100"><div class="card-body py-3">
+            <div class="small text-body-secondary"><i class="bi bi-grid-3x3-gap"></i> Chunks</div>
+            <div class="fs-4 fw-semibold" data-stat="chunks">–</div></div></div></div>
+          <div class="col-6 col-md-3"><div class="card h-100"><div class="card-body py-3">
+            <div class="small text-body-secondary"><i class="bi bi-vector-pen"></i> Vector size</div>
+            <div class="fs-4 fw-semibold"><span data-stat="embedding_dimensions">–</span> <span class="fs-6 fw-normal text-body-secondary">dims</span></div></div></div></div>
+          <div class="col-6 col-md-3"><div class="card h-100"><div class="card-body py-3">
+            <div class="small text-body-secondary"><i class="bi bi-funnel"></i> Chunks per answer</div>
+            <div class="fs-4 fw-semibold">top <span data-stat="top_k">–</span></div></div></div></div>
+        </div>
+        <div id="stats-error" class="alert alert-warning d-none py-2 small"></div>
+
+        <!-- Phase 1: ingestion -->
+        <h2 class="h5 fw-semibold mt-2"><i class="bi bi-database-add text-primary"></i> 1 · Building the knowledge base
+          <span class="badge rounded-pill text-bg-light border fw-normal ms-1">offline, once</span></h2>
+        <p class="text-body-secondary small mb-3">Done ahead of time by <code>export_kb.py</code> and <code>load_data.py</code>. Run them again whenever the website changes.</p>
+        <div class="row row-cols-1 row-cols-md-2 row-cols-xxl-3 g-3 mb-5">
+          <div class="col"><div class="card step-card h-100"><div class="card-body">
+            <div class="d-flex gap-2 align-items-center mb-2"><span class="step-num">1</span><h3 class="h6 mb-0">Export</h3></div>
+            <p class="small mb-2">Every page under /support is pulled through the WordPress REST API. Menus and search boxes are removed, and each article becomes a Markdown file with its title, URL and section.</p>
+            <span class="badge text-bg-secondary"><span data-stat="articles">–</span> articles</span></div></div></div>
+          <div class="col"><div class="card step-card h-100"><div class="card-body">
+            <div class="d-flex gap-2 align-items-center mb-2"><span class="step-num">2</span><h3 class="h6 mb-0">Tag</h3></div>
+            <p class="small mb-2">An LLM reads each article and adds metadata: search <em>keywords</em> and whether it contains code (<em>hasCode</em>), which can be used to filter searches.</p>
+            <span class="badge text-bg-secondary" data-stat="tagging_model">–</span></div></div></div>
+          <div class="col"><div class="card step-card h-100"><div class="card-body">
+            <div class="d-flex gap-2 align-items-center mb-2"><span class="step-num">3</span><h3 class="h6 mb-0">Chunk</h3></div>
+            <p class="small mb-2">Articles are split at their headings, then into pieces of up to <span data-stat="chunk_size">–</span> characters (<span data-stat="chunk_overlap">–</span> overlap). Each chunk starts with "Article &gt; Section" so it still makes sense on its own.</p>
+            <span class="badge text-bg-secondary"><span data-stat="chunks">–</span> chunks</span></div></div></div>
+          <div class="col"><div class="card step-card h-100"><div class="card-body">
+            <div class="d-flex gap-2 align-items-center mb-2"><span class="step-num">4</span><h3 class="h6 mb-0">Embed</h3></div>
+            <p class="small mb-2">An embedding model turns each chunk into a list of <span data-stat="embedding_dimensions">–</span> numbers (a vector). Chunks with similar meaning get vectors that point in similar directions.</p>
+            <span class="badge text-bg-secondary" data-stat="embedding_model">–</span></div></div></div>
+          <div class="col"><div class="card step-card h-100"><div class="card-body">
+            <div class="d-flex gap-2 align-items-center mb-2"><span class="step-num">5</span><h3 class="h6 mb-0">Store &amp; index</h3></div>
+            <p class="small mb-2">Text, vector and metadata are stored in MongoDB Atlas. A vector search index (cosine similarity) makes finding the nearest chunks fast, with filters on <em>section</em> and <em>hasCode</em>.</p>
+            <span class="badge text-bg-secondary" data-stat="database">–</span></div></div></div>
+        </div>
+
+        <!-- Phase 2: query -->
+        <h2 class="h5 fw-semibold"><i class="bi bi-chat-square-text text-primary"></i> 2 · Answering a question
+          <span class="badge rounded-pill text-bg-light border fw-normal ms-1">every message</span></h2>
+        <p class="text-body-secondary small mb-3">These steps light up live while your question is processed.</p>
+        <div class="row row-cols-1 row-cols-md-2 row-cols-xxl-4 g-3 mb-4">
+          <div class="col"><div class="card step-card h-100" id="q-embed"><div class="card-body">
+            <div class="d-flex gap-2 align-items-center mb-2"><span class="step-num">1</span><h3 class="h6 mb-0">Embed the question</h3></div>
+            <p class="small mb-2">The question is turned into a vector with the <strong>same</strong> model used for the chunks, so the two can be compared.</p>
+            <div class="small text-body-secondary step-status"></div></div></div></div>
+          <div class="col"><div class="card step-card h-100" id="q-search"><div class="card-body">
+            <div class="d-flex gap-2 align-items-center mb-2"><span class="step-num">2</span><h3 class="h6 mb-0">Vector search</h3></div>
+            <p class="small mb-2">Atlas Vector Search finds the <span data-stat="top_k">–</span> chunks whose vectors are closest to the question's: the most relevant passages, even when the wording differs.</p>
+            <div class="small text-body-secondary step-status"></div></div></div></div>
+          <div class="col"><div class="card step-card h-100" id="q-prompt"><div class="card-body">
+            <div class="d-flex gap-2 align-items-center mb-2"><span class="step-num">3</span><h3 class="h6 mb-0">Build the prompt</h3></div>
+            <p class="small mb-2">The chunks and their source URLs are inserted into a prompt with rules: answer only from this context, say "I don't know" otherwise, and list the sources.</p>
+            <div class="small text-body-secondary step-status"></div></div></div></div>
+          <div class="col"><div class="card step-card h-100" id="q-generate"><div class="card-body">
+            <div class="d-flex gap-2 align-items-center mb-2"><span class="step-num">4</span><h3 class="h6 mb-0">Generate</h3></div>
+            <p class="small mb-2">The LLM (<span data-stat="answer_model">–</span>) writes the answer from the prompt, and it appears in the chat with its sources.</p>
+            <div class="small text-body-secondary step-status"></div></div></div></div>
+        </div>
+
+        <!-- Live trace -->
+        <div class="card mb-4">
+          <div class="card-header d-flex align-items-center gap-2">
+            <i class="bi bi-activity text-primary"></i><strong>Live trace of your last question</strong>
+          </div>
+          <div class="card-body" id="trace">
+            <p class="text-body-secondary small mb-0">Ask a question in the chat to see the chunks the search found, how similar each one is, and how long each step took.</p>
+          </div>
+        </div>
+
+        <p class="small text-body-secondary mb-0">
+          <i class="bi bi-shield-lock"></i> API keys stay on the server (<code>app.py</code>); the browser only talks to this local app.
+        </p>
       </div>
-    </div>
+    </section>
+
+    <!-- ===================== RIGHT 1/3: chat ===================== -->
+    <section class="col-lg-4 order-1 order-lg-2 border-start bg-body d-flex flex-column chat-pane">
+      <div class="px-3 py-3 border-bottom d-flex align-items-center gap-2">
+        <i class="bi bi-robot fs-4 text-primary"></i>
+        <div>
+          <div class="fw-semibold">Ask the knowledge base</div>
+          <div class="small text-body-secondary">Answers take about 10–20 seconds</div>
+        </div>
+      </div>
+
+      <div id="messages" class="flex-grow-1 p-3 d-flex flex-column gap-3" aria-live="polite">
+        <div class="bubble bg-body-secondary rounded-3 p-3 align-self-start">
+          <p class="mb-2">Hi! Ask me anything about Docomotion, or try one of these:</p>
+          <div class="d-flex flex-wrap gap-2" id="suggestions">
+            <button type="button" class="btn btn-sm btn-outline-primary rounded-pill">What permission sets does Docomotion support?</button>
+            <button type="button" class="btn btn-sm btn-outline-primary rounded-pill">How do I add a Generate button to a record page?</button>
+            <button type="button" class="btn btn-sm btn-outline-primary rounded-pill">How do I protect a PDF with a password?</button>
+            <button type="button" class="btn btn-sm btn-outline-primary rounded-pill">Why is the sky blue?</button>
+          </div>
+        </div>
+      </div>
+
+      <form id="form" class="p-3 border-top">
+        <div class="input-group">
+          <textarea id="input" class="form-control" rows="2" placeholder="Ask a question… (Enter to send)" aria-label="Your question"></textarea>
+          <button id="send" class="btn btn-primary" type="submit" aria-label="Send"><i class="bi bi-send-fill"></i></button>
+        </div>
+      </form>
+    </section>
+
   </div>
+</div>
 
-  <form id="form">
-    <textarea id="input" placeholder="Ask a question… (Enter to send, Shift+Enter for a new line)" aria-label="Your question"></textarea>
-    <button id="send" type="submit">Send</button>
-  </form>
-</main>
-
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
 <script>
-  const messages = document.getElementById("messages");
-  const form = document.getElementById("form");
-  const input = document.getElementById("input");
-  const send = document.getElementById("send");
+  const $ = (sel) => document.querySelector(sel);
+  const messages = $("#messages"), form = $("#form"), input = $("#input"), send = $("#send"), trace = $("#trace");
+  const STEPS = ["q-embed", "q-search", "q-prompt", "q-generate"];
 
-  function addMessage(cls, content, isHtml = false) {
+  const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+  const renderMarkdown = (text) =>
+    DOMPurify.sanitize(marked.parse(text)).replace(/<a /g, '<a target="_blank" rel="noopener" ');
+
+  // ---------- live numbers ----------
+  fetch("/api/stats").then((r) => r.json()).then((s) => {
+    if (s.error) throw new Error(s.error);
+    document.querySelectorAll("[data-stat]").forEach((el) => {
+      const v = s[el.dataset.stat];
+      if (v !== undefined) el.textContent = typeof v === "number" ? v.toLocaleString() : v;
+    });
+  }).catch((e) => {
+    const box = $("#stats-error");
+    box.textContent = "Could not load live numbers: " + e.message;
+    box.classList.remove("d-none");
+  });
+
+  // ---------- pipeline step highlighting ----------
+  function setStep(id, state, status = "") {
+    const card = document.getElementById(id);
+    card.classList.remove("active", "done");
+    if (state) card.classList.add(state);
+    const icon = state === "active" ? '<span class="spinner-border spinner-border-sm me-1"></span>'
+               : state === "done" ? '<i class="bi bi-check-circle-fill text-success me-1"></i>' : "";
+    card.querySelector(".step-status").innerHTML = icon + esc(status);
+  }
+  const resetSteps = () => STEPS.forEach((id) => setStep(id, null));
+
+  // ---------- chat ----------
+  function addBubble(kind, html) {
     const div = document.createElement("div");
-    div.className = "msg " + cls;
-    if (isHtml) div.innerHTML = content; else div.textContent = content;
+    const styles = {
+      user: "bubble bubble-user bg-primary text-white rounded-3 px-3 py-2 align-self-end",
+      bot: "bubble bg-body-secondary rounded-3 p-3 align-self-start",
+      error: "bubble alert alert-danger mb-0 py-2 align-self-start",
+    };
+    div.className = styles[kind];
+    div.innerHTML = html;
     messages.appendChild(div);
     messages.scrollTop = messages.scrollHeight;
     return div;
   }
 
-  function renderMarkdown(text) {
-    const html = DOMPurify.sanitize(marked.parse(text));
-    // Open source links in a new tab
-    return html.replace(/<a /g, '<a target="_blank" rel="noopener" ');
+  async function postJSON(url, body) {
+    const res = await fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+    const data = await res.json().catch(() => ({ error: res.statusText }));
+    if (!res.ok) throw new Error(data.error || res.statusText);
+    return data;
+  }
+
+  function renderTrace(question, r) {
+    const items = r.chunks.map((c, i) => `
+      <div class="accordion-item">
+        <h3 class="accordion-header">
+          <button class="accordion-button collapsed py-2" type="button" data-bs-toggle="collapse" data-bs-target="#chunk-${i}">
+            <span class="d-flex flex-column flex-md-row gap-md-3 w-100 align-items-md-center">
+              <span class="d-flex align-items-center gap-2 text-nowrap">
+                <span class="badge text-bg-primary">#${i + 1}</span>
+                <span class="progress score-bar" role="progressbar" aria-label="similarity">
+                  <span class="progress-bar" style="width:${Math.round(c.score * 100)}%"></span></span>
+                <span class="small font-monospace">${c.score.toFixed(3)}</span>
+              </span>
+              <span class="small text-truncate">${esc(c.headings)}</span>
+            </span>
+          </button>
+        </h3>
+        <div id="chunk-${i}" class="accordion-collapse collapse">
+          <div class="accordion-body py-2">
+            <div class="mb-2 small">
+              <span class="badge text-bg-secondary">${esc(c.section || "general")}</span>
+              ${c.keywords.slice(0, 6).map((k) => `<span class="badge bg-body-secondary text-body-secondary fw-normal">${esc(k)}</span>`).join(" ")}
+            </div>
+            <div class="chunk-text border rounded p-2 mb-2">${esc(c.text)}</div>
+            <a class="small" href="${esc(c.source)}" target="_blank" rel="noopener"><i class="bi bi-box-arrow-up-right"></i> ${esc(c.source)}</a>
+          </div>
+        </div>
+      </div>`).join("");
+
+    trace.innerHTML = `
+      <p class="mb-2"><span class="text-body-secondary small">Question:</span> <strong>${esc(question)}</strong></p>
+      <div class="d-flex flex-wrap gap-2 mb-3" id="trace-timings">
+        <span class="badge text-bg-light border"><i class="bi bi-search"></i> Embed + search: ${r.seconds}s</span>
+      </div>
+      <p class="small text-body-secondary mb-2">Top ${r.chunks.length} chunks by similarity score (0–1, higher is closer). Click one to see the text sent to the LLM.</p>
+      <div class="accordion" id="chunks">${items}</div>`;
+  }
+
+  function addTiming(html) {
+    const t = document.getElementById("trace-timings");
+    if (t) t.insertAdjacentHTML("beforeend", `<span class="badge text-bg-light border">${html}</span>`);
   }
 
   async function ask(question) {
     question = question.trim();
     if (!question || send.disabled) return;
-    addMessage("user", question);
+    addBubble("user", esc(question));
     input.value = "";
     send.disabled = true;
-    const pending = addMessage("bot thinking", "Searching the knowledge base and writing an answer");
+    resetSteps();
+    const pending = addBubble("bot", '<span class="spinner-border spinner-border-sm me-2"></span><span class="text-body-secondary">Searching the knowledge base…</span>');
 
     try {
-      const res = await fetch("/api/chat", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ question }),
-      });
-      const data = await res.json();
+      setStep("q-embed", "active", "Calling Voyage AI…");
+      setStep("q-search", "active", "Querying Atlas…");
+      const r = await postJSON("/api/retrieve", { question });
+      setStep("q-embed", "done", "Question embedded");
+      setStep("q-search", "done", `${r.chunks.length} chunks in ${r.seconds}s`);
+      renderTrace(question, r);
+
+      pending.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span><span class="text-body-secondary">Writing the answer…</span>';
+      setStep("q-prompt", "done", `${r.chunks.length} chunks + rules`);
+      setStep("q-generate", "active", "Waiting for Gemini…");
+      const a = await postJSON("/api/answer", { trace_id: r.trace_id });
+      setStep("q-prompt", "done", `~${a.prompt_tokens_estimate.toLocaleString()} tokens`);
+      setStep("q-generate", "done", `Answered in ${a.seconds}s`);
+      addTiming(`<i class="bi bi-file-text"></i> Prompt: ~${a.prompt_tokens_estimate.toLocaleString()} tokens`);
+      addTiming(`<i class="bi bi-stars"></i> Generate: ${a.seconds}s`);
+
       pending.remove();
-      if (!res.ok) {
-        addMessage("error", "Error: " + (data.error || res.statusText));
-      } else {
-        const div = addMessage("bot", renderMarkdown(data.answer), true);
-        const meta = document.createElement("div");
-        meta.className = "meta";
-        meta.textContent = `Answered in ${data.seconds}s`;
-        div.appendChild(meta);
-      }
+      addBubble("bot", renderMarkdown(a.answer) +
+        `<div class="small text-body-secondary mt-2"><i class="bi bi-clock"></i> ${(r.seconds + a.seconds).toFixed(1)}s total</div>`);
     } catch (err) {
       pending.remove();
-      addMessage("error", "Could not reach the server. Is app.py still running?");
+      STEPS.forEach((id) => {
+        if (document.getElementById(id).classList.contains("active")) setStep(id, null, "Failed");
+      });
+      addBubble("error", '<i class="bi bi-exclamation-triangle"></i> ' + esc(err.message || "Could not reach the server. Is app.py still running?"));
     } finally {
       send.disabled = false;
       input.focus();
@@ -150,12 +324,8 @@
   }
 
   form.addEventListener("submit", (e) => { e.preventDefault(); ask(input.value); });
-  input.addEventListener("keydown", (e) => {
-    if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); ask(input.value); }
-  });
-  document.querySelectorAll(".suggestions button").forEach((b) =>
-    b.addEventListener("click", () => ask(b.textContent))
-  );
+  input.addEventListener("keydown", (e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); ask(input.value); } });
+  document.querySelectorAll("#suggestions button").forEach((b) => b.addEventListener("click", () => ask(b.textContent)));
   input.focus();
 </script>
 </body>
