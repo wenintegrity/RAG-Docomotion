@@ -5,328 +5,239 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Docomotion Assistant · RAG demo</title>
 <script>
-  // Follow the OS light/dark setting (Bootstrap 5.3 color modes)
-  document.documentElement.setAttribute("data-bs-theme",
-    window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");
+  // Apply the saved (or system) color mode before the page paints
+  (function () {
+    let stored = null;
+    try { stored = localStorage.getItem("theme"); } catch (e) {}
+    const auto = window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+    document.documentElement.setAttribute("data-bs-theme", stored && stored !== "auto" ? stored : auto);
+  })();
 </script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
 <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
-<script src="https://cdn.jsdelivr.net/npm/marked@12.0.2/marked.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/dompurify@3.1.6/dist/purify.min.js"></script>
-<style>
-  html, body { height: 100%; }
-  .app-row { min-height: 100vh; }
-  @media (min-width: 992px) {
-    .app-row { height: 100vh; }
-    .pane-scroll { height: 100vh; overflow-y: auto; }
-  }
-  /* Pipeline step cards */
-  .step-card { transition: border-color .2s, box-shadow .2s; }
-  .step-num {
-    width: 28px; height: 28px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center;
-    font-size: .8rem; font-weight: 600; background: var(--bs-secondary-bg); color: var(--bs-secondary-color); flex-shrink: 0;
-  }
-  .step-card.active { border-color: var(--bs-primary); box-shadow: 0 0 0 .2rem rgba(var(--bs-primary-rgb), .15); }
-  .step-card.active .step-num { background: var(--bs-primary); color: #fff; }
-  .step-card.done { border-color: var(--bs-success); }
-  .step-card.done .step-num { background: var(--bs-success); color: #fff; }
-  .step-status { min-height: 1.25rem; }
-  .flow-arrow { color: var(--bs-secondary-color); }
-  /* Chat */
-  .chat-pane { height: 75vh; }
-  @media (min-width: 992px) { .chat-pane { height: 100vh; } }
-  #messages { overflow-y: auto; }
-  .bubble { max-width: 92%; overflow-wrap: anywhere; }
-  .bubble-user { white-space: pre-wrap; }
-  .bubble p:last-child, .bubble ul:last-child, .bubble ol:last-child { margin-bottom: 0; }
-  .bubble ul, .bubble ol { padding-left: 1.2rem; }
-  .bubble pre { background: var(--bs-tertiary-bg); padding: .5rem; border-radius: .375rem; }
-  #input { resize: none; }
-  .chunk-text { white-space: pre-wrap; font-size: .85rem; max-height: 220px; overflow-y: auto; }
-  .score-bar { width: 90px; height: 6px; }
-</style>
+<link href="css/app.css" rel="stylesheet">
 </head>
-<body class="bg-body-tertiary">
-<div class="container-fluid p-0">
-  <div class="row g-0 app-row">
+<body class="app">
+
+<!-- ===================== Navbar ===================== -->
+<nav class="navbar app-navbar sticky-top px-3 px-lg-4 py-2">
+  <a class="navbar-brand d-flex align-items-center gap-2 me-auto" href="/">
+    <span class="brand-logo"><i class="bi bi-stars"></i></span>
+    <span class="d-flex flex-column lh-1">
+      <span class="fw-semibold fs-6">Docomotion Assistant</span>
+      <span class="small text-body-secondary mt-1" style="font-size:.72rem">Retrieval-Augmented Generation demo</span>
+    </span>
+  </a>
+  <div class="d-flex align-items-center gap-2">
+    <a class="btn btn-sm btn-outline-secondary rounded-pill d-none d-md-inline-flex align-items-center gap-1"
+       href="https://www.docomotion.com/support/" target="_blank" rel="noopener">
+      <i class="bi bi-journal-text"></i> Knowledge base
+    </a>
+    <div class="dropdown">
+      <button class="btn btn-sm btn-outline-secondary rounded-pill d-inline-flex align-items-center gap-1" id="theme-toggle"
+              type="button" data-bs-toggle="dropdown" aria-expanded="false" aria-label="Color mode">
+        <i class="bi bi-circle-half" id="theme-icon"></i>
+      </button>
+      <ul class="dropdown-menu dropdown-menu-end shadow-sm">
+        <li><button class="dropdown-item d-flex align-items-center gap-2" data-theme-value="light"><i class="bi bi-sun"></i> Light</button></li>
+        <li><button class="dropdown-item d-flex align-items-center gap-2" data-theme-value="dark"><i class="bi bi-moon-stars"></i> Dark</button></li>
+        <li><button class="dropdown-item d-flex align-items-center gap-2" data-theme-value="auto"><i class="bi bi-circle-half"></i> Auto</button></li>
+      </ul>
+    </div>
+  </div>
+</nav>
+
+<main class="app-main container-fluid p-0">
+  <div class="row g-0">
 
     <!-- ===================== LEFT 2/3: how it works ===================== -->
     <section class="col-lg-8 order-2 order-lg-1 pane-scroll">
-      <div class="p-4 p-xl-5">
+      <div class="p-3 p-md-4 p-xl-5 d-flex flex-column gap-4">
 
-        <div class="d-flex align-items-center gap-2 mb-2">
-          <span class="badge text-bg-primary">RAG demo</span>
-          <span class="badge text-bg-secondary">LangChain · MongoDB Atlas · Voyage AI · Gemini</span>
+        <!-- Hero -->
+        <div class="hero">
+          <div class="eyebrow mb-2">How it works</div>
+          <h1 class="h3 fw-bold mb-2">Answers grounded in the Docomotion knowledge base</h1>
+          <p class="text-body-secondary mb-3" style="max-width: 62ch">
+            A language model on its own doesn't know Docomotion's documentation. This assistant uses
+            <strong class="text-body">Retrieval-Augmented Generation (RAG)</strong>: it first <em>retrieves</em> the passages
+            most relevant to your question from the
+            <a href="https://www.docomotion.com/support/" target="_blank" rel="noopener">support site</a>,
+            then has the model answer <em>from those passages only</em>, citing its sources, or saying "I don't know" when the
+            knowledge base doesn't cover a question.
+          </p>
+          <div class="d-flex flex-wrap gap-2">
+            <span class="chip"><i class="bi bi-diagram-3"></i> LangChain</span>
+            <span class="chip"><i class="bi bi-database"></i> MongoDB Atlas Vector Search</span>
+            <span class="chip"><i class="bi bi-vector-pen"></i> Voyage AI embeddings</span>
+            <span class="chip"><i class="bi bi-stars"></i> Google Gemini</span>
+          </div>
         </div>
-        <h1 class="h3 fw-semibold mb-2">Docomotion Knowledge Assistant</h1>
-        <p class="lead fs-6 text-body-secondary mb-4">
-          An example of <strong>Retrieval-Augmented Generation (RAG)</strong>. A language model doesn't know
-          Docomotion's documentation, so before answering, this app <em>retrieves</em> the most relevant passages
-          from the <a href="https://www.docomotion.com/support/" target="_blank" rel="noopener">Docomotion knowledge base</a>
-          and gives them to the model as context. Answers are grounded in that text, cite their sources,
-          and the assistant says "I don't know" when the knowledge base doesn't cover a question.
-        </p>
 
-        <!-- Live numbers -->
-        <div class="row g-3 mb-4" id="stats">
-          <div class="col-6 col-md-3"><div class="card h-100"><div class="card-body py-3">
-            <div class="small text-body-secondary"><i class="bi bi-file-earmark-text"></i> Articles</div>
-            <div class="fs-4 fw-semibold" data-stat="articles">–</div></div></div></div>
-          <div class="col-6 col-md-3"><div class="card h-100"><div class="card-body py-3">
-            <div class="small text-body-secondary"><i class="bi bi-grid-3x3-gap"></i> Chunks</div>
-            <div class="fs-4 fw-semibold" data-stat="chunks">–</div></div></div></div>
-          <div class="col-6 col-md-3"><div class="card h-100"><div class="card-body py-3">
-            <div class="small text-body-secondary"><i class="bi bi-vector-pen"></i> Vector size</div>
-            <div class="fs-4 fw-semibold"><span data-stat="embedding_dimensions">–</span> <span class="fs-6 fw-normal text-body-secondary">dims</span></div></div></div></div>
-          <div class="col-6 col-md-3"><div class="card h-100"><div class="card-body py-3">
-            <div class="small text-body-secondary"><i class="bi bi-funnel"></i> Chunks per answer</div>
-            <div class="fs-4 fw-semibold">top <span data-stat="top_k">–</span></div></div></div></div>
+        <!-- Stats -->
+        <div>
+          <div class="row g-3">
+            <div class="col-6 col-xl-3"><div class="card stat-tile h-100"><div class="d-flex gap-3 align-items-center">
+              <span class="stat-icon"><i class="bi bi-file-earmark-text"></i></span>
+              <div><div class="stat-value" data-stat="articles">–</div><div class="stat-label">Articles indexed</div></div></div></div></div>
+            <div class="col-6 col-xl-3"><div class="card stat-tile h-100"><div class="d-flex gap-3 align-items-center">
+              <span class="stat-icon"><i class="bi bi-grid-3x3-gap"></i></span>
+              <div><div class="stat-value" data-stat="chunks">–</div><div class="stat-label">Searchable chunks</div></div></div></div></div>
+            <div class="col-6 col-xl-3"><div class="card stat-tile h-100"><div class="d-flex gap-3 align-items-center">
+              <span class="stat-icon"><i class="bi bi-bounding-box"></i></span>
+              <div><div class="stat-value" data-stat="embedding_dimensions">–</div><div class="stat-label">Numbers per vector</div></div></div></div></div>
+            <div class="col-6 col-xl-3"><div class="card stat-tile h-100"><div class="d-flex gap-3 align-items-center">
+              <span class="stat-icon"><i class="bi bi-funnel"></i></span>
+              <div><div class="stat-value">top <span data-stat="top_k">–</span></div><div class="stat-label">Chunks per answer</div></div></div></div></div>
+          </div>
+          <div id="stats-error" class="alert alert-warning d-none py-2 small mt-3 mb-0"></div>
         </div>
-        <div id="stats-error" class="alert alert-warning d-none py-2 small"></div>
 
         <!-- Phase 1: ingestion -->
-        <h2 class="h5 fw-semibold mt-2"><i class="bi bi-database-add text-primary"></i> 1 · Building the knowledge base
-          <span class="badge rounded-pill text-bg-light border fw-normal ms-1">offline, once</span></h2>
-        <p class="text-body-secondary small mb-3">Done ahead of time by <code>export_kb.py</code> and <code>load_data.py</code>. Run them again whenever the website changes.</p>
-        <div class="row row-cols-1 row-cols-md-2 row-cols-xxl-3 g-3 mb-5">
-          <div class="col"><div class="card step-card h-100"><div class="card-body">
-            <div class="d-flex gap-2 align-items-center mb-2"><span class="step-num">1</span><h3 class="h6 mb-0">Export</h3></div>
-            <p class="small mb-2">Every page under /support is pulled through the WordPress REST API. Menus and search boxes are removed, and each article becomes a Markdown file with its title, URL and section.</p>
-            <span class="badge text-bg-secondary"><span data-stat="articles">–</span> articles</span></div></div></div>
-          <div class="col"><div class="card step-card h-100"><div class="card-body">
-            <div class="d-flex gap-2 align-items-center mb-2"><span class="step-num">2</span><h3 class="h6 mb-0">Tag</h3></div>
-            <p class="small mb-2">An LLM reads each article and adds metadata: search <em>keywords</em> and whether it contains code (<em>hasCode</em>), which can be used to filter searches.</p>
-            <span class="badge text-bg-secondary" data-stat="tagging_model">–</span></div></div></div>
-          <div class="col"><div class="card step-card h-100"><div class="card-body">
-            <div class="d-flex gap-2 align-items-center mb-2"><span class="step-num">3</span><h3 class="h6 mb-0">Chunk</h3></div>
-            <p class="small mb-2">Articles are split at their headings, then into pieces of up to <span data-stat="chunk_size">–</span> characters (<span data-stat="chunk_overlap">–</span> overlap). Each chunk starts with "Article &gt; Section" so it still makes sense on its own.</p>
-            <span class="badge text-bg-secondary"><span data-stat="chunks">–</span> chunks</span></div></div></div>
-          <div class="col"><div class="card step-card h-100"><div class="card-body">
-            <div class="d-flex gap-2 align-items-center mb-2"><span class="step-num">4</span><h3 class="h6 mb-0">Embed</h3></div>
-            <p class="small mb-2">An embedding model turns each chunk into a list of <span data-stat="embedding_dimensions">–</span> numbers (a vector). Chunks with similar meaning get vectors that point in similar directions.</p>
-            <span class="badge text-bg-secondary" data-stat="embedding_model">–</span></div></div></div>
-          <div class="col"><div class="card step-card h-100"><div class="card-body">
-            <div class="d-flex gap-2 align-items-center mb-2"><span class="step-num">5</span><h3 class="h6 mb-0">Store &amp; index</h3></div>
-            <p class="small mb-2">Text, vector and metadata are stored in MongoDB Atlas. A vector search index (cosine similarity) makes finding the nearest chunks fast, with filters on <em>section</em> and <em>hasCode</em>.</p>
-            <span class="badge text-bg-secondary" data-stat="database">–</span></div></div></div>
+        <div>
+          <div class="section-title">
+            <h2 class="h5 fw-semibold mb-0">Building the knowledge base</h2>
+            <span class="badge rounded-pill bg-primary-subtle text-primary-emphasis">offline · run once</span>
+          </div>
+          <p class="text-body-secondary small mb-3">Prepared ahead of time by <code>export_kb.py</code> and <code>load_data.py</code>, and re-run whenever the website changes.</p>
+          <div class="row row-cols-1 row-cols-md-2 row-cols-xxl-3 g-3">
+            <div class="col"><div class="card step-card h-100"><div class="card-body">
+              <div class="d-flex gap-3 align-items-center mb-2"><span class="step-icon"><i class="bi bi-cloud-download"></i></span>
+                <div><div class="step-kicker">Step 1</div><h3>Export</h3></div></div>
+              <p class="mb-2">Every page under /support is pulled through the WordPress REST API. Menus and search boxes are removed, and each article becomes a Markdown file with its title, URL and section.</p>
+              <span class="badge rounded-pill bg-body-secondary text-body-secondary fw-normal"><span data-stat="articles">–</span> articles</span></div></div></div>
+            <div class="col"><div class="card step-card h-100"><div class="card-body">
+              <div class="d-flex gap-3 align-items-center mb-2"><span class="step-icon"><i class="bi bi-tags"></i></span>
+                <div><div class="step-kicker">Step 2</div><h3>Tag</h3></div></div>
+              <p class="mb-2">An LLM reads each article and adds metadata: search <em>keywords</em> and whether it contains code (<em>hasCode</em>), which searches can filter on.</p>
+              <span class="badge rounded-pill bg-body-secondary text-body-secondary fw-normal" data-stat="tagging_model">–</span></div></div></div>
+            <div class="col"><div class="card step-card h-100"><div class="card-body">
+              <div class="d-flex gap-3 align-items-center mb-2"><span class="step-icon"><i class="bi bi-scissors"></i></span>
+                <div><div class="step-kicker">Step 3</div><h3>Chunk</h3></div></div>
+              <p class="mb-2">Articles are split at their headings, then into pieces of up to <span data-stat="chunk_size">–</span> characters (<span data-stat="chunk_overlap">–</span> overlap). Each chunk starts with "Article &gt; Section" so it still makes sense on its own.</p>
+              <span class="badge rounded-pill bg-body-secondary text-body-secondary fw-normal"><span data-stat="chunks">–</span> chunks</span></div></div></div>
+            <div class="col"><div class="card step-card h-100"><div class="card-body">
+              <div class="d-flex gap-3 align-items-center mb-2"><span class="step-icon"><i class="bi bi-vector-pen"></i></span>
+                <div><div class="step-kicker">Step 4</div><h3>Embed</h3></div></div>
+              <p class="mb-2">An embedding model turns each chunk into a vector of <span data-stat="embedding_dimensions">–</span> numbers. Chunks with similar meaning get vectors that point in similar directions.</p>
+              <span class="badge rounded-pill bg-body-secondary text-body-secondary fw-normal" data-stat="embedding_model">–</span></div></div></div>
+            <div class="col"><div class="card step-card h-100"><div class="card-body">
+              <div class="d-flex gap-3 align-items-center mb-2"><span class="step-icon"><i class="bi bi-database-check"></i></span>
+                <div><div class="step-kicker">Step 5</div><h3>Store &amp; index</h3></div></div>
+              <p class="mb-2">Text, vector and metadata go into MongoDB Atlas. A vector search index (cosine similarity) finds the nearest chunks fast, with filters on <em>section</em> and <em>hasCode</em>.</p>
+              <span class="badge rounded-pill bg-body-secondary text-body-secondary fw-normal" data-stat="database">–</span></div></div></div>
+          </div>
         </div>
 
         <!-- Phase 2: query -->
-        <h2 class="h5 fw-semibold"><i class="bi bi-chat-square-text text-primary"></i> 2 · Answering a question
-          <span class="badge rounded-pill text-bg-light border fw-normal ms-1">every message</span></h2>
-        <p class="text-body-secondary small mb-3">These steps light up live while your question is processed.</p>
-        <div class="row row-cols-1 row-cols-md-2 row-cols-xxl-4 g-3 mb-4">
-          <div class="col"><div class="card step-card h-100" id="q-embed"><div class="card-body">
-            <div class="d-flex gap-2 align-items-center mb-2"><span class="step-num">1</span><h3 class="h6 mb-0">Embed the question</h3></div>
-            <p class="small mb-2">The question is turned into a vector with the <strong>same</strong> model used for the chunks, so the two can be compared.</p>
-            <div class="small text-body-secondary step-status"></div></div></div></div>
-          <div class="col"><div class="card step-card h-100" id="q-search"><div class="card-body">
-            <div class="d-flex gap-2 align-items-center mb-2"><span class="step-num">2</span><h3 class="h6 mb-0">Vector search</h3></div>
-            <p class="small mb-2">Atlas Vector Search finds the <span data-stat="top_k">–</span> chunks whose vectors are closest to the question's: the most relevant passages, even when the wording differs.</p>
-            <div class="small text-body-secondary step-status"></div></div></div></div>
-          <div class="col"><div class="card step-card h-100" id="q-prompt"><div class="card-body">
-            <div class="d-flex gap-2 align-items-center mb-2"><span class="step-num">3</span><h3 class="h6 mb-0">Build the prompt</h3></div>
-            <p class="small mb-2">The chunks and their source URLs are inserted into a prompt with rules: answer only from this context, say "I don't know" otherwise, and list the sources.</p>
-            <div class="small text-body-secondary step-status"></div></div></div></div>
-          <div class="col"><div class="card step-card h-100" id="q-generate"><div class="card-body">
-            <div class="d-flex gap-2 align-items-center mb-2"><span class="step-num">4</span><h3 class="h6 mb-0">Generate</h3></div>
-            <p class="small mb-2">The LLM (<span data-stat="answer_model">–</span>) writes the answer from the prompt, and it appears in the chat with its sources.</p>
-            <div class="small text-body-secondary step-status"></div></div></div></div>
+        <div>
+          <div class="section-title">
+            <h2 class="h5 fw-semibold mb-0">Answering your question</h2>
+            <span class="badge rounded-pill bg-primary-subtle text-primary-emphasis">live · every message</span>
+          </div>
+          <p class="text-body-secondary small mb-3">Watch these steps light up as your question is processed.</p>
+          <div class="row row-cols-1 row-cols-md-2 row-cols-xxl-4 g-3">
+            <div class="col"><div class="card step-card h-100" id="q-embed"><div class="card-body">
+              <div class="d-flex gap-3 align-items-center mb-2"><span class="step-icon"><i class="bi bi-123"></i></span>
+                <div><div class="step-kicker">Step 1</div><h3>Embed the question</h3></div></div>
+              <p class="mb-2">Your question becomes a vector, using the <strong class="text-body">same</strong> model as the chunks so the two can be compared.</p>
+              <div class="step-status text-body-secondary"></div></div></div></div>
+            <div class="col"><div class="card step-card h-100" id="q-search"><div class="card-body">
+              <div class="d-flex gap-3 align-items-center mb-2"><span class="step-icon"><i class="bi bi-search"></i></span>
+                <div><div class="step-kicker">Step 2</div><h3>Vector search</h3></div></div>
+              <p class="mb-2">Atlas finds the <span data-stat="top_k">–</span> chunks closest in meaning to the question, even when the wording differs.</p>
+              <div class="step-status text-body-secondary"></div></div></div></div>
+            <div class="col"><div class="card step-card h-100" id="q-prompt"><div class="card-body">
+              <div class="d-flex gap-3 align-items-center mb-2"><span class="step-icon"><i class="bi bi-file-earmark-code"></i></span>
+                <div><div class="step-kicker">Step 3</div><h3>Build the prompt</h3></div></div>
+              <p class="mb-2">The chunks and their URLs go into a prompt with rules: use only this context, say "I don't know" otherwise, cite sources.</p>
+              <div class="step-status text-body-secondary"></div></div></div></div>
+            <div class="col"><div class="card step-card h-100" id="q-generate"><div class="card-body">
+              <div class="d-flex gap-3 align-items-center mb-2"><span class="step-icon"><i class="bi bi-stars"></i></span>
+                <div><div class="step-kicker">Step 4</div><h3>Generate</h3></div></div>
+              <p class="mb-2">The LLM (<span data-stat="answer_model">–</span>) writes the answer, which appears in the chat with its sources.</p>
+              <div class="step-status text-body-secondary"></div></div></div></div>
+          </div>
         </div>
 
         <!-- Live trace -->
-        <div class="card mb-4">
-          <div class="card-header d-flex align-items-center gap-2">
-            <i class="bi bi-activity text-primary"></i><strong>Live trace of your last question</strong>
+        <div class="card">
+          <div class="card-header bg-transparent border-bottom d-flex align-items-center gap-2 py-3">
+            <span class="stat-icon" style="width:32px;height:32px;font-size:1rem"><i class="bi bi-activity"></i></span>
+            <div>
+              <div class="fw-semibold">Live trace</div>
+              <div class="small text-body-secondary">What the search found for your last question</div>
+            </div>
           </div>
           <div class="card-body" id="trace">
-            <p class="text-body-secondary small mb-0">Ask a question in the chat to see the chunks the search found, how similar each one is, and how long each step took.</p>
+            <div class="trace-empty">
+              <i class="bi bi-chat-square-dots d-block mb-2"></i>
+              Ask a question to see the chunks the search found, how similar each one is, and how long each step took.
+            </div>
           </div>
         </div>
 
         <p class="small text-body-secondary mb-0">
-          <i class="bi bi-shield-lock"></i> API keys stay on the server (<code>app.py</code>); the browser only talks to this app's own API.
+          <i class="bi bi-shield-lock"></i> API keys stay on the server; the browser only talks to this app's own API.
         </p>
       </div>
     </section>
 
     <!-- ===================== RIGHT 1/3: chat ===================== -->
-    <section class="col-lg-4 order-1 order-lg-2 border-start bg-body d-flex flex-column chat-pane">
-      <div class="px-3 py-3 border-bottom d-flex align-items-center gap-2">
-        <i class="bi bi-robot fs-4 text-primary"></i>
-        <div>
+    <section class="col-lg-4 order-1 order-lg-2 chat-pane d-flex flex-column">
+      <div class="chat-header px-3 py-3 d-flex align-items-center gap-2">
+        <span class="avatar avatar-bot"><i class="bi bi-robot"></i></span>
+        <div class="me-auto lh-sm">
           <div class="fw-semibold">Ask the knowledge base</div>
-          <div class="small text-body-secondary">Answers take about 10–20 seconds</div>
-        </div>
-      </div>
-
-      <div id="messages" class="flex-grow-1 p-3 d-flex flex-column gap-3" aria-live="polite">
-        <div class="bubble bg-body-secondary rounded-3 p-3 align-self-start">
-          <p class="mb-2">Hi! Ask me anything about Docomotion, or try one of these:</p>
-          <div class="d-flex flex-wrap gap-2" id="suggestions">
-            <button type="button" class="btn btn-sm btn-outline-primary rounded-pill">What permission sets does Docomotion support?</button>
-            <button type="button" class="btn btn-sm btn-outline-primary rounded-pill">How do I add a Generate button to a record page?</button>
-            <button type="button" class="btn btn-sm btn-outline-primary rounded-pill">How do I protect a PDF with a password?</button>
-            <button type="button" class="btn btn-sm btn-outline-primary rounded-pill">Why is the sky blue?</button>
+          <div class="small text-body-secondary d-flex align-items-center gap-1">
+            <span class="status-dot" id="status-dot"></span><span id="status-text">Ready</span>
           </div>
         </div>
+        <button class="btn btn-sm btn-outline-secondary rounded-pill" id="clear" type="button" title="Clear chat" aria-label="Clear chat">
+          <i class="bi bi-arrow-counterclockwise"></i>
+        </button>
       </div>
 
+      <div id="messages" class="flex-grow-1 p-3 d-flex flex-column gap-3" aria-live="polite"></div>
+
       <form id="form" class="p-3 border-top">
-        <div class="input-group">
-          <textarea id="input" class="form-control" rows="2" placeholder="Ask a question… (Enter to send)" aria-label="Your question"></textarea>
-          <button id="send" class="btn btn-primary" type="submit" aria-label="Send"><i class="bi bi-send-fill"></i></button>
+        <div class="d-flex align-items-center gap-2 mb-2">
+          <label for="section" class="small text-body-secondary"><i class="bi bi-funnel"></i> Search in</label>
+          <select id="section" class="form-select form-select-sm section-select">
+            <option value="all">All sections</option>
+          </select>
         </div>
+        <div class="composer">
+          <textarea id="input" rows="1" placeholder="Ask about Docomotion…" aria-label="Your question"></textarea>
+          <button id="send" class="btn btn-primary send-btn" type="submit" aria-label="Send"><i class="bi bi-arrow-up"></i></button>
+        </div>
+        <div class="composer-hint mt-1 ps-1">Enter to send · Shift+Enter for a new line · answers take ~10–30s</div>
       </form>
     </section>
 
   </div>
-</div>
+</main>
+
+<template id="welcome-tpl">
+  <div class="welcome">
+    <div class="welcome-icon"><i class="bi bi-stars"></i></div>
+    <h2 class="h6 fw-semibold mb-1">Ask anything about Docomotion</h2>
+    <p class="small text-body-secondary mb-3">Answers come only from the knowledge base, with links to the source pages.</p>
+    <div class="d-flex flex-column gap-2">
+      <button type="button" class="suggestion"><i class="bi bi-person-lock"></i>What permission sets does Docomotion support?</button>
+      <button type="button" class="suggestion"><i class="bi bi-ui-checks"></i>How do I add a Generate button to a record page?</button>
+      <button type="button" class="suggestion"><i class="bi bi-file-earmark-lock"></i>How do I protect a PDF with a password?</button>
+      <button type="button" class="suggestion"><i class="bi bi-cloud-sun"></i>Why is the sky blue?</button>
+    </div>
+  </div>
+</template>
 
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
-<script>
-  const $ = (sel) => document.querySelector(sel);
-  const messages = $("#messages"), form = $("#form"), input = $("#input"), send = $("#send"), trace = $("#trace");
-  const STEPS = ["q-embed", "q-search", "q-prompt", "q-generate"];
-
-  const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
-  const renderMarkdown = (text) =>
-    DOMPurify.sanitize(marked.parse(text)).replace(/<a /g, '<a target="_blank" rel="noopener" ');
-
-  // ---------- live numbers ----------
-  fetch("/api/stats").then((r) => r.json()).then((s) => {
-    if (s.error) throw new Error(s.error);
-    document.querySelectorAll("[data-stat]").forEach((el) => {
-      const v = s[el.dataset.stat];
-      if (v !== undefined) el.textContent = typeof v === "number" ? v.toLocaleString() : v;
-    });
-  }).catch((e) => {
-    const box = $("#stats-error");
-    box.textContent = e.message;
-    box.classList.remove("d-none");
-  });
-
-  // ---------- pipeline step highlighting ----------
-  function setStep(id, state, status = "") {
-    const card = document.getElementById(id);
-    card.classList.remove("active", "done");
-    if (state) card.classList.add(state);
-    const icon = state === "active" ? '<span class="spinner-border spinner-border-sm me-1"></span>'
-               : state === "done" ? '<i class="bi bi-check-circle-fill text-success me-1"></i>' : "";
-    card.querySelector(".step-status").innerHTML = icon + esc(status);
-  }
-  const resetSteps = () => STEPS.forEach((id) => setStep(id, null));
-
-  // ---------- chat ----------
-  function addBubble(kind, html) {
-    const div = document.createElement("div");
-    const styles = {
-      user: "bubble bubble-user bg-primary text-white rounded-3 px-3 py-2 align-self-end",
-      bot: "bubble bg-body-secondary rounded-3 p-3 align-self-start",
-      error: "bubble alert alert-danger mb-0 py-2 align-self-start",
-    };
-    div.className = styles[kind];
-    div.innerHTML = html;
-    messages.appendChild(div);
-    messages.scrollTop = messages.scrollHeight;
-    return div;
-  }
-
-  async function postJSON(url, body) {
-    const res = await fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
-    const data = await res.json().catch(() => ({ error: res.statusText }));
-    if (!res.ok) throw new Error(data.error || res.statusText);
-    return data;
-  }
-
-  function renderTrace(question, r) {
-    const items = r.chunks.map((c, i) => `
-      <div class="accordion-item">
-        <h3 class="accordion-header">
-          <button class="accordion-button collapsed py-2" type="button" data-bs-toggle="collapse" data-bs-target="#chunk-${i}">
-            <span class="d-flex flex-column flex-md-row gap-md-3 w-100 align-items-md-center">
-              <span class="d-flex align-items-center gap-2 text-nowrap">
-                <span class="badge text-bg-primary">#${i + 1}</span>
-                <span class="progress score-bar" role="progressbar" aria-label="similarity">
-                  <span class="progress-bar" style="width:${Math.round(c.score * 100)}%"></span></span>
-                <span class="small font-monospace">${c.score.toFixed(3)}</span>
-              </span>
-              <span class="small text-truncate">${esc(c.headings)}</span>
-            </span>
-          </button>
-        </h3>
-        <div id="chunk-${i}" class="accordion-collapse collapse">
-          <div class="accordion-body py-2">
-            <div class="mb-2 small">
-              <span class="badge text-bg-secondary">${esc(c.section || "general")}</span>
-              ${c.keywords.slice(0, 6).map((k) => `<span class="badge bg-body-secondary text-body-secondary fw-normal">${esc(k)}</span>`).join(" ")}
-            </div>
-            <div class="chunk-text border rounded p-2 mb-2">${esc(c.text)}</div>
-            <a class="small" href="${esc(c.source)}" target="_blank" rel="noopener"><i class="bi bi-box-arrow-up-right"></i> ${esc(c.source)}</a>
-          </div>
-        </div>
-      </div>`).join("");
-
-    trace.innerHTML = `
-      <p class="mb-2"><span class="text-body-secondary small">Question:</span> <strong>${esc(question)}</strong></p>
-      <div class="d-flex flex-wrap gap-2 mb-3" id="trace-timings">
-        <span class="badge text-bg-light border"><i class="bi bi-search"></i> Embed + search: ${r.seconds}s</span>
-      </div>
-      <p class="small text-body-secondary mb-2">Top ${r.chunks.length} chunks by similarity score (0–1, higher is closer). Click one to see the text sent to the LLM.</p>
-      <div class="accordion" id="chunks">${items}</div>`;
-  }
-
-  function addTiming(html) {
-    const t = document.getElementById("trace-timings");
-    if (t) t.insertAdjacentHTML("beforeend", `<span class="badge text-bg-light border">${html}</span>`);
-  }
-
-  async function ask(question) {
-    question = question.trim();
-    if (!question || send.disabled) return;
-    addBubble("user", esc(question));
-    input.value = "";
-    send.disabled = true;
-    resetSteps();
-    const pending = addBubble("bot", '<span class="spinner-border spinner-border-sm me-2"></span><span class="text-body-secondary">Searching the knowledge base…</span>');
-
-    try {
-      setStep("q-embed", "active", "Calling Voyage AI…");
-      setStep("q-search", "active", "Querying Atlas…");
-      const r = await postJSON("/api/retrieve", { question });
-      setStep("q-embed", "done", "Question embedded");
-      setStep("q-search", "done", `${r.chunks.length} chunks in ${r.seconds}s`);
-      renderTrace(question, r);
-
-      pending.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span><span class="text-body-secondary">Writing the answer…</span>';
-      setStep("q-prompt", "done", `${r.chunks.length} chunks + rules`);
-      setStep("q-generate", "active", "Waiting for Gemini…");
-      const a = await postJSON("/api/answer", { question, chunk_ids: r.chunks.map((c) => c.id) });
-      setStep("q-prompt", "done", `~${a.prompt_tokens_estimate.toLocaleString()} tokens`);
-      setStep("q-generate", "done", `Answered in ${a.seconds}s`);
-      addTiming(`<i class="bi bi-file-text"></i> Prompt: ~${a.prompt_tokens_estimate.toLocaleString()} tokens`);
-      addTiming(`<i class="bi bi-stars"></i> Generate: ${a.seconds}s`);
-
-      pending.remove();
-      addBubble("bot", renderMarkdown(a.answer) +
-        `<div class="small text-body-secondary mt-2"><i class="bi bi-clock"></i> ${(r.seconds + a.seconds).toFixed(1)}s total</div>`);
-    } catch (err) {
-      pending.remove();
-      STEPS.forEach((id) => {
-        if (document.getElementById(id).classList.contains("active")) setStep(id, null, "Failed");
-      });
-      addBubble("error", '<i class="bi bi-exclamation-triangle"></i> ' + esc(err.message || "Could not reach the server. Is app.py still running?"));
-    } finally {
-      send.disabled = false;
-      input.focus();
-      messages.scrollTop = messages.scrollHeight;
-    }
-  }
-
-  form.addEventListener("submit", (e) => { e.preventDefault(); ask(input.value); });
-  input.addEventListener("keydown", (e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); ask(input.value); } });
-  document.querySelectorAll("#suggestions button").forEach((b) => b.addEventListener("click", () => ask(b.textContent)));
-  input.focus();
-</script>
+<script src="https://cdn.jsdelivr.net/npm/marked@12.0.2/marked.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/dompurify@3.1.6/dist/purify.min.js"></script>
+<script src="js/app.js"></script>
 </body>
 </html>

@@ -27,7 +27,8 @@ import config
 import key_param
 
 PUBLIC_DIR = Path(__file__).parent / "public"
-app = Flask(__name__)
+# Serve the front end (public/index.html, public/css, public/js) at the site root, like Vercel's CDN does
+app = Flask(__name__, static_folder=str(PUBLIC_DIR), static_url_path="")
 
 MISSING = key_param.missing_settings()
 if not MISSING:
@@ -61,6 +62,14 @@ def stats():
         collection = retriever.vector_store.collection
         chunks = collection.count_documents({})
         articles = len(collection.distinct("source"))
+        # Knowledge base areas for the "Search in" filter, with how much content each has
+        sections = [
+            {"name": s["_id"] or "", "chunks": s["chunks"], "articles": len(s["articles"])}
+            for s in collection.aggregate([
+                {"$group": {"_id": "$section", "chunks": {"$sum": 1}, "articles": {"$addToSet": "$source"}}},
+                {"$sort": {"chunks": -1}},
+            ])
+        ]
     except Exception as e:
         app.logger.exception("Stats query failed")
         return _error(f"Could not reach MongoDB Atlas ({type(e).__name__}). "
@@ -68,6 +77,7 @@ def stats():
     return jsonify(
         articles=articles,
         chunks=chunks,
+        sections=sections,
         chunk_size=config.CHUNK_SIZE,
         chunk_overlap=config.CHUNK_OVERLAP,
         tagging_model=config.TAGGING_MODEL,
@@ -93,13 +103,20 @@ def _read_question(body: dict):
 def retrieve():
     if MISSING:
         return _config_error()
-    question, err = _read_question(request.get_json(silent=True) or {})
+    body = request.get_json(silent=True) or {}
+    question, err = _read_question(body)
     if err:
         return err
+    # Optional "Search in" filter: None/"all" = whole knowledge base, "" = top-level articles
+    section = body.get("section")
+    if section == "all":
+        section = None
+    if section is not None and (not isinstance(section, str) or len(section) > 80):
+        return _error("Invalid section.", 400)
 
     start = time.time()
     try:
-        results = retriever.query_data_with_scores(question, k=config.TOP_K)
+        results = retriever.query_data_with_scores(question, section=section, k=config.TOP_K)
     except Exception as e:  # surface API errors (rate limits, network) in the page
         app.logger.exception("Retrieval failed")
         return _error(f"{type(e).__name__}: {str(e)[:300]}", 502)
