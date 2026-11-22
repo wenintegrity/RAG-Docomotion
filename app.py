@@ -1,100 +1,114 @@
-"""Local chat UI for the Docomotion RAG application.
+"""Web app for the Docomotion RAG demo (runs locally and on Vercel).
 
-Serves static/index.html and a small JSON API that runs the RAG steps from
-rag.py / retriever.py. Each question is handled in two calls so the page can
-show the retrieved chunks before the answer is ready:
+Serves public/index.html and a small, stateless JSON API. Each question is handled in
+two calls so the page can show the retrieved chunks before the answer is ready:
 
-  POST /api/retrieve  {question}  -> embed question + vector search -> chunks, scores, timing
-  POST /api/answer    {trace_id}  -> build prompt from those chunks + Gemini -> answer, timing
-  GET  /api/stats                 -> live numbers and settings shown on the page
+  POST /api/retrieve  {question}             -> embed question + vector search -> chunks (with ids), scores, timing
+  POST /api/answer    {question, chunk_ids}  -> reload those chunks from Atlas + Gemini -> answer, timing
+  GET  /api/stats                            -> live numbers and settings shown on the page
 
-API keys stay on the server side (read from .env), never in the browser.
+The answer step reloads chunks by id instead of trusting text sent by the browser, so only
+knowledge base content can reach the prompt, and no state is kept between requests
+(serverless instances can differ between the two calls).
 
-Usage:  python app.py   then open http://localhost:8000
+API keys stay on the server (environment variables), never in the browser.
+
+Local:   python app.py   then open http://localhost:8000
+Vercel:  deployed automatically from GitHub; set the environment variables listed in key_param.REQUIRED
 """
 
-import threading
 import time
-import uuid
-from collections import OrderedDict
 from pathlib import Path
 
+from bson.errors import InvalidId
 from flask import Flask, jsonify, request, send_from_directory
 
-import load_data
-import rag
-import retriever
+import config
+import key_param
 
-STATIC_DIR = Path(__file__).parent / "static"
+PUBLIC_DIR = Path(__file__).parent / "public"
 app = Flask(__name__)
 
-# Retrieved chunks waiting for their answer step, keyed by trace id (kept small; local demo server)
-_traces: OrderedDict[str, tuple[str, list]] = OrderedDict()
-_traces_lock = threading.Lock()
-MAX_TRACES = 100
+MISSING = key_param.missing_settings()
+if not MISSING:
+    # Only import the RAG modules when configured: they connect to the APIs at import time
+    import rag
+    import retriever
 
 
 def _error(message: str, status: int):
     return jsonify(error=message), status
 
 
+def _config_error():
+    return _error(
+        "The server is missing these settings: " + ", ".join(MISSING)
+        + ". Locally, add them to .env. On Vercel, add them under Project > Settings > "
+          "Environment Variables, then redeploy.", 500)
+
+
 @app.get("/")
 def index():
-    return send_from_directory(STATIC_DIR, "index.html")
+    # On Vercel, public/index.html is served by the CDN before reaching this route
+    return send_from_directory(PUBLIC_DIR, "index.html")
 
 
 @app.get("/api/stats")
 def stats():
-    collection = retriever.vector_store.collection
+    if MISSING:
+        return _config_error()
     try:
+        collection = retriever.vector_store.collection
         chunks = collection.count_documents({})
         articles = len(collection.distinct("source"))
     except Exception as e:
         app.logger.exception("Stats query failed")
-        return _error(f"Could not reach MongoDB Atlas: {type(e).__name__}", 502)
+        return _error(f"Could not reach MongoDB Atlas ({type(e).__name__}). "
+                      "Check that the server's IP is allowed in Atlas Network Access.", 502)
     return jsonify(
         articles=articles,
         chunks=chunks,
-        chunk_size=load_data.CHUNK_SIZE,
-        chunk_overlap=load_data.CHUNK_OVERLAP,
-        tagging_model=load_data.TAGGING_MODEL,
-        embedding_model=retriever.EMBEDDING_MODEL,
-        embedding_dimensions=load_data.EMBEDDING_DIMENSIONS,
-        top_k=rag.TOP_K,
-        answer_model=rag.ANSWER_MODEL,
-        database=f"{retriever.DB_NAME}.{retriever.COLLECTION_NAME}",
-        index=retriever.INDEX_NAME,
+        chunk_size=config.CHUNK_SIZE,
+        chunk_overlap=config.CHUNK_OVERLAP,
+        tagging_model=config.TAGGING_MODEL,
+        embedding_model=config.EMBEDDING_MODEL,
+        embedding_dimensions=config.EMBEDDING_DIMENSIONS,
+        top_k=config.TOP_K,
+        answer_model=config.ANSWER_MODEL,
+        database=f"{config.DB_NAME}.{config.COLLECTION_NAME}",
+        index=config.INDEX_NAME,
     )
+
+
+def _read_question(body: dict):
+    question = str(body.get("question", "")).strip()
+    if not question:
+        return None, _error("Please type a question.", 400)
+    if len(question) > 1000:
+        return None, _error("Please keep the question under 1000 characters.", 400)
+    return question, None
 
 
 @app.post("/api/retrieve")
 def retrieve():
-    question = (request.get_json(silent=True) or {}).get("question", "").strip()
-    if not question:
-        return _error("Please type a question.", 400)
-    if len(question) > 1000:
-        return _error("Please keep the question under 1000 characters.", 400)
+    if MISSING:
+        return _config_error()
+    question, err = _read_question(request.get_json(silent=True) or {})
+    if err:
+        return err
 
     start = time.time()
     try:
-        results = retriever.query_data_with_scores(question, k=rag.TOP_K)
+        results = retriever.query_data_with_scores(question, k=config.TOP_K)
     except Exception as e:  # surface API errors (rate limits, network) in the page
         app.logger.exception("Retrieval failed")
         return _error(f"{type(e).__name__}: {str(e)[:300]}", 502)
-    seconds = round(time.time() - start, 2)
-
-    docs = [doc for doc, _ in results]
-    trace_id = uuid.uuid4().hex
-    with _traces_lock:
-        _traces[trace_id] = (question, docs)
-        while len(_traces) > MAX_TRACES:
-            _traces.popitem(last=False)
 
     chunks = [
         {
+            "id": str(doc.metadata.get("_id", "")),
             "score": round(score, 4),
             "headings": doc.metadata.get("headings", ""),
-            "title": doc.metadata.get("title", ""),
             "section": doc.metadata.get("section", ""),
             "source": doc.metadata.get("source", ""),
             "keywords": doc.metadata.get("keywords", []),
@@ -102,17 +116,28 @@ def retrieve():
         }
         for doc, score in results
     ]
-    return jsonify(trace_id=trace_id, seconds=seconds, chunks=chunks)
+    return jsonify(seconds=round(time.time() - start, 2), chunks=chunks)
 
 
 @app.post("/api/answer")
 def answer():
-    trace_id = (request.get_json(silent=True) or {}).get("trace_id", "")
-    with _traces_lock:
-        trace = _traces.pop(trace_id, None)
-    if trace is None:
-        return _error("This question expired, please ask it again.", 404)
-    question, docs = trace
+    if MISSING:
+        return _config_error()
+    body = request.get_json(silent=True) or {}
+    question, err = _read_question(body)
+    if err:
+        return err
+    chunk_ids = body.get("chunk_ids", [])
+    if not isinstance(chunk_ids, list) or len(chunk_ids) > config.TOP_K:
+        return _error("Invalid chunk list.", 400)
+
+    try:
+        docs = retriever.get_chunks_by_ids([str(i) for i in chunk_ids])
+    except InvalidId:
+        return _error("Invalid chunk id.", 400)
+    except Exception as e:
+        app.logger.exception("Loading chunks failed")
+        return _error(f"{type(e).__name__}: {str(e)[:300]}", 502)
 
     prompt = rag.build_prompt(question, docs)
     start = time.time()

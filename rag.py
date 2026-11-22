@@ -16,10 +16,8 @@ from langchain_core.runnables import RunnableLambda, RunnablePassthrough
 from langchain_google_genai import ChatGoogleGenerativeAI
 
 import key_param
+from config import ANSWER_MODEL, TOP_K
 from retriever import query_data as retrieve_chunks  # same Voyage model + Atlas index used at load time
-
-ANSWER_MODEL = "gemini-3.5-flash"  # ~20 s per answer; "gemini-3.5-flash-lite" is ~8 s with shorter answers
-TOP_K = 5                          # chunks given to the model (lab used 3; our chunks are short sections)
 
 template = """
 Use the following pieces of context from the Docomotion knowledge base to answer the question at the end.

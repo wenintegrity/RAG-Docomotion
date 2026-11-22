@@ -1,14 +1,9 @@
-langchain==1.5.2
-langchain-community==0.4.2
-langchain-core==1.8.4
-langchain-openai==1.8.5
-langchain-mongodb==0.12.1
-langchain-voyageai==0.4.1
-langchain-google-genai==4.5.2
-pymongo==4.20.1
-pypdf==7.1.1
-python-dotenv==1.2.4
-pyyaml==6.0.4
-markdownify==1.2.4
-beautifulsoup4==4.15.0
+# Web app (app.py) - this is what Vercel installs, so keep it lean.
+# The export/loading pipeline needs more: pip install -r requirements-ingest.txt
 flask==3.1.3
+pymongo==4.20.1
+python-dotenv==1.2.4
+voyageai==0.6.0
+langchain-core==1.8.4
+langchain-mongodb==0.12.1
+langchain-google-genai==4.5.2

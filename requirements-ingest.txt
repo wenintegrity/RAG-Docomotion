@@ -1,0 +1,13 @@
+# Everything for the full pipeline: export_kb.py, load_data.py, plus the web app.
+-r requirements.txt
+requests==2.34.2
+beautifulsoup4==4.15.0
+markdownify==1.2.4
+pyyaml==6.0.4
+langchain-text-splitters==1.1.3
+langchain-voyageai==0.4.1
+# Libraries from the original tutorial setup (not used by the current scripts)
+langchain==1.5.2
+langchain-community==0.4.2
+langchain-openai==1.8.5
+pypdf==7.1.1

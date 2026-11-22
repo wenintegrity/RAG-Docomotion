@@ -28,22 +28,16 @@ from pydantic import BaseModel, Field
 from pymongo import MongoClient
 
 import key_param
+from config import (CHUNK_OVERLAP, CHUNK_SIZE, COLLECTION_NAME, DB_NAME, EMBEDDING_DIMENSIONS,
+                    EMBEDDING_MODEL, INDEX_NAME, TAGGING_MODEL)
 
 KB_DIR = Path(__file__).parent / "knowledge_base"
-DB_NAME = "docomotion_kb"
-COLLECTION_NAME = "chunked_data"
-INDEX_NAME = "vector_index"
-TAGGING_MODEL = "gemini-3.5-flash-lite"  # ~1-2 s per article; tested fastest of the available Flash models
 TAGGING_REQUESTS_PER_MINUTE = 12  # stays under the Gemini free-tier per-minute limit
 TAGS_CACHE = Path(__file__).parent / "tags_cache.json"  # re-runs only re-tag articles whose text changed
-EMBEDDING_MODEL = "voyage-3.5-lite"
-EMBEDDING_DIMENSIONS = 1024  # voyage-3.5-lite default
 # Voyage limits without a payment method on the Atlas/Voyage account: 3 requests and 10K tokens per minute.
 # After adding a payment method, raise these (standard limits are far higher) and the load takes ~1 minute.
 VOYAGE_REQUESTS_PER_MINUTE = 3
 VOYAGE_TOKENS_PER_MINUTE = 10_000
-CHUNK_SIZE = 1000            # tutorial used 500 for PDF paragraphs; KB how-to steps read better whole
-CHUNK_OVERLAP = 150
 MIN_CHUNK_CHARS = 50         # chunks with less text than this (besides headings) are dropped
 
 

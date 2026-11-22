@@ -145,7 +145,7 @@
         </div>
 
         <p class="small text-body-secondary mb-0">
-          <i class="bi bi-shield-lock"></i> API keys stay on the server (<code>app.py</code>); the browser only talks to this local app.
+          <i class="bi bi-shield-lock"></i> API keys stay on the server (<code>app.py</code>); the browser only talks to this app's own API.
         </p>
       </div>
     </section>
@@ -202,7 +202,7 @@
     });
   }).catch((e) => {
     const box = $("#stats-error");
-    box.textContent = "Could not load live numbers: " + e.message;
+    box.textContent = e.message;
     box.classList.remove("d-none");
   });
 
@@ -301,7 +301,7 @@
       pending.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span><span class="text-body-secondary">Writing the answer…</span>';
       setStep("q-prompt", "done", `${r.chunks.length} chunks + rules`);
       setStep("q-generate", "active", "Waiting for Gemini…");
-      const a = await postJSON("/api/answer", { trace_id: r.trace_id });
+      const a = await postJSON("/api/answer", { question, chunk_ids: r.chunks.map((c) => c.id) });
       setStep("q-prompt", "done", `~${a.prompt_tokens_estimate.toLocaleString()} tokens`);
       setStep("q-generate", "done", `Answered in ${a.seconds}s`);
       addTiming(`<i class="bi bi-file-text"></i> Prompt: ~${a.prompt_tokens_estimate.toLocaleString()} tokens`);

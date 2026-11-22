@@ -11,28 +11,58 @@ import sys
 import time
 
 import voyageai
+from bson import ObjectId
 from langchain_core.documents import Document
+from langchain_core.embeddings import Embeddings
 from langchain_mongodb import MongoDBAtlasVectorSearch
-from langchain_voyageai import VoyageAIEmbeddings
 
 import key_param
+from config import COLLECTION_NAME, DB_NAME, EMBEDDING_MODEL, INDEX_NAME, TOP_K
 
-DB_NAME = "docomotion_kb"
-COLLECTION_NAME = "chunked_data"
-INDEX_NAME = "vector_index"
-EMBEDDING_MODEL = "voyage-3.5-lite"  # must match the model used in load_data.py
-TOP_K = 5
+
+class VoyageEmbeddings(Embeddings):
+    """Minimal Voyage AI embeddings for querying.
+
+    langchain_voyageai.VoyageAIEmbeddings tokenizes every text before sending it, which downloads
+    a tokenizer from Hugging Face at runtime - that fails on read-only serverless filesystems
+    (Vercel). The plain voyageai client call needs no tokenizer.
+    """
+
+    def __init__(self, model: str, api_key: str, base_url: str | None = None):
+        self.model = model
+        self.client = voyageai.Client(api_key=api_key, base_url=base_url)
+
+    def embed_documents(self, texts: list[str]) -> list[list[float]]:
+        return self.client.embed(texts, model=self.model, input_type="document").embeddings
+
+    def embed_query(self, text: str) -> list[float]:
+        return self.client.embed([text], model=self.model, input_type="query").embeddings[0]
+
 
 vector_store = MongoDBAtlasVectorSearch.from_connection_string(
     connection_string=key_param.MONGODB_URI,
     namespace=f"{DB_NAME}.{COLLECTION_NAME}",
-    embedding=VoyageAIEmbeddings(
-        model=EMBEDDING_MODEL,
-        voyage_api_key=key_param.VOYAGE_API_KEY,
+    embedding=VoyageEmbeddings(
+        model=EMBEDDING_MODEL,  # must match the model used in load_data.py
+        api_key=key_param.VOYAGE_API_KEY,
         base_url=key_param.VOYAGE_API_BASE,  # Atlas-issued Voyage keys use ai.mongodb.com
     ),
     index_name=INDEX_NAME,
 )
+
+
+def get_chunks_by_ids(ids: list[str]) -> list[Document]:
+    """Load stored chunks by their _id, in the given order (used by the web app's answer step)."""
+    object_ids = [ObjectId(i) for i in ids]
+    found = {str(d["_id"]): d for d in vector_store.collection.find({"_id": {"$in": object_ids}},
+                                                                     {"embedding": 0})}
+    docs = []
+    for i in ids:
+        d = found.get(i)
+        if d:
+            metadata = {k: v for k, v in d.items() if k not in ("_id", "text")}
+            docs.append(Document(page_content=d["text"], metadata=metadata))
+    return docs
 
 
 def _build_pre_filter(section: str | None, has_code: bool | None) -> dict:
