@@ -1,0 +1,45 @@
+{
+  "version": 2,
+  "skills": {
+    "bootstrap-color-system": {
+      "source": "twbs/bootstrap",
+      "commit": "ac35207a34b41414b21ba568967a2cc32f8f84f1",
+      "sourceType": "github",
+      "skillPath": "skills/bootstrap-color-system/SKILL.md",
+      "computedHash": "0aa4cf0f8e3fda9c2355646d25e27d4a6a24cb8e83cddfdbddc2d4dc9c5c0bca",
+      "installMode": "copy"
+    },
+    "bootstrap-component": {
+      "source": "twbs/bootstrap",
+      "commit": "ac35207a34b41414b21ba568967a2cc32f8f84f1",
+      "sourceType": "github",
+      "skillPath": "skills/bootstrap-component/SKILL.md",
+      "computedHash": "266b13b42cbf418d66019605feba654f81f828f00eb716c0d287e0fd29af5059",
+      "installMode": "copy"
+    },
+    "bootstrap-component-js": {
+      "source": "twbs/bootstrap",
+      "commit": "ac35207a34b41414b21ba568967a2cc32f8f84f1",
+      "sourceType": "github",
+      "skillPath": "skills/bootstrap-component-js/SKILL.md",
+      "computedHash": "f9144d4a79651f70d467825af9bda3aa9631bf6bfb70e206d09acfa68505b672",
+      "installMode": "copy"
+    },
+    "bootstrap-v5-v6-migration": {
+      "source": "twbs/bootstrap",
+      "commit": "ac35207a34b41414b21ba568967a2cc32f8f84f1",
+      "sourceType": "github",
+      "skillPath": "skills/bootstrap-v5-v6-migration/SKILL.md",
+      "computedHash": "4b4216eeb6fab056219bf4c2cbaa89a94102c04277d58c5cec3bf520e5223c6c",
+      "installMode": "copy"
+    },
+    "bootstrap-v6-install": {
+      "source": "twbs/bootstrap",
+      "commit": "ac35207a34b41414b21ba568967a2cc32f8f84f1",
+      "sourceType": "github",
+      "skillPath": "skills/bootstrap-v6-install/SKILL.md",
+      "computedHash": "ab4a447b2f2f2708ca6796df49ebbbc5739c11848334b6b96723453b86139b5a",
+      "installMode": "copy"
+    }
+  }
+}
