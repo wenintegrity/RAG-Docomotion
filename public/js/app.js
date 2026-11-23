@@ -224,6 +224,13 @@
     input.focus();
   });
 
+  // "Try it" buttons in the left pane's "Why RAG?" cards send their question to the chat
+  document.querySelectorAll("[data-ask]").forEach((b) =>
+    b.addEventListener("click", () => {
+      ask(b.dataset.ask);
+      if (window.matchMedia("(max-width: 991.98px)").matches) messages.scrollIntoView({ behavior: "smooth" });
+    }));
+
   showWelcome();
   input.focus();
 })();

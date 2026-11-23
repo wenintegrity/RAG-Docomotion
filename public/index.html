@@ -61,16 +61,21 @@
 
         <!-- Hero -->
         <div class="hero">
-          <div class="eyebrow mb-2">How it works</div>
-          <h1 class="h3 fw-bold mb-2">Answers grounded in the <span class="highlight">Docomotion</span> knowledge base</h1>
+          <div class="eyebrow mb-2">Retrieval-Augmented Generation (RAG)</div>
+          <h1 class="h3 fw-bold mb-2">Trustworthy AI answers from the <span class="highlight">Docomotion</span> knowledge base</h1>
           <p class="mb-3" style="max-width: 62ch">
-            A language model on its own doesn't know Docomotion's documentation. This assistant uses
-            <strong class="text-white">Retrieval-Augmented Generation (RAG)</strong>: it first <em>retrieves</em> the passages
-            most relevant to your question from the
+            Language models write fluently, but on their own they don't know your product, can't see anything published
+            after training, and sometimes make up answers that sound confident.
+            <strong class="text-white">RAG fixes this by connecting the model to your own content.</strong>
+            Before answering, the assistant <em>retrieves</em> the most relevant passages from the
             <a href="https://www.docomotion.com/support/" target="_blank" rel="noopener">support site</a>,
-            then has the model answer <em>from those passages only</em>, citing its sources, or saying "I don't know" when the
-            knowledge base doesn't cover a question.
+            then answers <em>from those passages only</em>, with links to its sources.
           </p>
+          <ul class="hero-points list-unstyled d-flex flex-wrap mb-3">
+            <li><i class="bi bi-check-circle-fill"></i> Grounded in official docs</li>
+            <li><i class="bi bi-check-circle-fill"></i> Every answer cites its sources</li>
+            <li><i class="bi bi-check-circle-fill"></i> Updates without retraining</li>
+          </ul>
           <div class="d-flex flex-wrap gap-2">
             <span class="chip"><i class="bi bi-diagram-3"></i> LangChain</span>
             <span class="chip"><i class="bi bi-database"></i> MongoDB Atlas Vector Search</span>
@@ -79,8 +84,64 @@
           </div>
         </div>
 
+        <!-- Why RAG: benefits -->
+        <div>
+          <div class="section-title">
+            <h2 class="h5 fw-semibold mb-0">Why RAG?</h2>
+            <span class="badge rounded-pill bg-primary-subtle text-primary-emphasis">the business case</span>
+          </div>
+          <p class="text-body-secondary small mb-3" style="max-width: 75ch">
+            RAG is the most practical way to give an AI assistant a company's own knowledge. Here is what it adds
+            compared with a language model on its own, and where you can see each benefit in this demo.
+          </p>
+          <div class="row row-cols-1 row-cols-md-2 row-cols-xxl-3 g-3">
+            <div class="col"><div class="card benefit-card h-100"><div class="card-body d-flex flex-column">
+              <div class="d-flex gap-3 align-items-center mb-2"><span class="step-icon"><i class="bi bi-shield-check"></i></span>
+                <h3>Fewer hallucinations</h3></div>
+              <p>Answers come from retrieved facts, not the model's memory. When the knowledge base doesn't cover a question, the assistant says so instead of guessing.</p>
+              <div class="proof mt-auto"><span>In this demo</span> Ask something off-topic and it politely declines.
+                <button type="button" class="try-btn" data-ask="Why is the sky blue?"><i class="bi bi-play-fill"></i> Try "Why is the sky blue?"</button></div>
+            </div></div></div>
+            <div class="col"><div class="card benefit-card h-100"><div class="card-body d-flex flex-column">
+              <div class="d-flex gap-3 align-items-center mb-2"><span class="step-icon"><i class="bi bi-link-45deg"></i></span>
+                <h3>Verifiable answers</h3></div>
+              <p>Every answer links to the pages it was built from, so users can check it in one click, and teams can trust what the AI tells customers.</p>
+              <div class="proof mt-auto"><span>In this demo</span> Source links follow every answer, and the live trace below shows each passage with its match score.
+                <button type="button" class="try-btn" data-ask="How do I protect a PDF with a password?"><i class="bi bi-play-fill"></i> Try a product question</button></div>
+            </div></div></div>
+            <div class="col"><div class="card benefit-card h-100"><div class="card-body d-flex flex-column">
+              <div class="d-flex gap-3 align-items-center mb-2"><span class="step-icon"><i class="bi bi-arrow-repeat"></i></span>
+                <h3>Always up to date</h3></div>
+              <p>When the documentation changes, re-index the content and the assistant knows it right away. No model retraining, unlike fine-tuning.</p>
+              <div class="proof mt-auto"><span>In this demo</span> A re-run re-processes only the articles whose text changed.</div>
+            </div></div></div>
+            <div class="col"><div class="card benefit-card h-100"><div class="card-body d-flex flex-column">
+              <div class="d-flex gap-3 align-items-center mb-2"><span class="step-icon"><i class="bi bi-buildings"></i></span>
+                <h3>Your knowledge, any model</h3></div>
+              <p>The knowledge lives in your own database, not inside the model, so you can switch or upgrade the LLM without losing anything.</p>
+              <div class="proof mt-auto"><span>In this demo</span> The answer model (<span data-stat="answer_model">–</span>) is a one-line setting.</div>
+            </div></div></div>
+            <div class="col"><div class="card benefit-card h-100"><div class="card-body d-flex flex-column">
+              <div class="d-flex gap-3 align-items-center mb-2"><span class="step-icon"><i class="bi bi-lock"></i></span>
+                <h3>Control &amp; security</h3></div>
+              <p>You decide exactly what the AI can see. Only approved content reaches the model, and searches can be limited to one area.</p>
+              <div class="proof mt-auto"><span>In this demo</span> The server reloads passages from the database, so nothing else can slip into the prompt. Use <em>Search in</em> to scope a question.</div>
+            </div></div></div>
+            <div class="col"><div class="card benefit-card h-100"><div class="card-body d-flex flex-column">
+              <div class="d-flex gap-3 align-items-center mb-2"><span class="step-icon"><i class="bi bi-piggy-bank"></i></span>
+                <h3>Cost-effective</h3></div>
+              <p>No training runs or GPU clusters. Smaller, faster models do the job well because the knowledge comes from search, not model size.</p>
+              <div class="proof mt-auto"><span>In this demo</span> Fast "Flash" models plus a managed vector database, deployed serverless.</div>
+            </div></div></div>
+          </div>
+        </div>
+
         <!-- Stats -->
         <div>
+          <div class="section-title">
+            <h2 class="h5 fw-semibold mb-0">Under the hood</h2>
+          </div>
+          <p class="text-body-secondary small mb-3">Live numbers from the knowledge base behind this assistant.</p>
           <div class="row g-3">
             <div class="col-6 col-xl-3"><div class="card stat-tile h-100"><div class="d-flex gap-3 align-items-center">
               <span class="stat-icon"><i class="bi bi-file-earmark-text"></i></span>
